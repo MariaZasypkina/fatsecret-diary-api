@@ -107,12 +107,20 @@ export function signRequest(
   return { ...allParams, oauth_signature: signature };
 }
 
+/**
+ * POST the signed OAuth parameters as a form-encoded body. FatSecret's
+ * servers do not accept POSTs with the parameters in the query string and
+ * an empty body: depending on the front end, such a request is rejected
+ * with 411 Length Required or fails signature verification.
+ */
 async function postForm(
   url: string,
   signedParams: Record<string, string>,
 ): Promise<URLSearchParams> {
-  const res = await fetch(`${url}?${toQuery(signedParams)}`, {
+  const res = await fetch(url, {
     method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: toQuery(signedParams),
   });
   const text = await res.text();
   if (!res.ok) {
@@ -200,7 +208,14 @@ export async function fatsecretRequest(
       tokenSecret: config.accessTokenSecret,
     },
   );
-  const res = await fetch(`${REST_URL}?${toQuery(signed)}`, { method });
+  const res =
+    method === "POST"
+      ? await fetch(REST_URL, {
+          method,
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: toQuery(signed),
+        })
+      : await fetch(`${REST_URL}?${toQuery(signed)}`, { method });
   const text = await res.text();
   let data: Record<string, any>;
   try {
